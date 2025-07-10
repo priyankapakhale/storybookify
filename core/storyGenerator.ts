@@ -3,7 +3,7 @@ import { parseProps } from "./propParser.js";
 import { generateSampleValue } from "./sampleData.js";
 
 export async function generateStory(component, outputDir: string) {
-  const { name, filePath } = component;
+  const { name, path: filePath } = component;
   const ext = path.extname(filePath);
   const isJS = ext === ".js" || ext === ".jsx";
 

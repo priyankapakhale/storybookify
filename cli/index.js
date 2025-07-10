@@ -7,7 +7,38 @@ import { scanComponents } from "../dist/core/componentScanner.js";
 import { generateStory } from "../dist/core/storyGenerator.js";
 import { writeStoryFile } from "../dist/utils/fileUtils.js";
 
-// --- CLI argument parsing ---
+const REPO_URL = "https://github.com/priyankapakhale/storybookify";
+
+//TODO: Add logo to be printed here
+function printLogo() {}
+
+function printWelcome() {
+  printLogo();
+  console.log(
+    "✨ storybookify ✨  —  The zero-config, plug-and-play Storybook generator!\n"
+  );
+}
+
+function printOutro(componentsCount, storiesPath) {
+  console.log(
+    "\n──────────────────────────────────────────────────────────────"
+  );
+  console.log(
+    `🎉 All stories generated! (${componentsCount} component${
+      componentsCount !== 1 ? "s" : ""
+    })`
+  );
+  console.log("\nTo view your Storybook, run:\n");
+  console.log("  cd storybook-app");
+  console.log("  npm install");
+  console.log("  npm run storybook\n");
+  console.log("For docs, troubleshooting, or to contribute:");
+  console.log(`  ${REPO_URL}\n`);
+  console.log(
+    "──────────────────────────────────────────────────────────────\n"
+  );
+}
+
 const program = new Command();
 
 program
@@ -17,7 +48,7 @@ program
   .option(
     "-c, --components-dir <dir>",
     "Directory with your components (default: example-components)",
-    undefined // We'll set a default below after merging with config!
+    undefined
   )
   .option(
     "-o, --output-dir <dir>",
@@ -38,14 +69,12 @@ let configPath = opts.config || join(process.cwd(), "storybookify.config.js");
 
 if (existsSync(configPath)) {
   try {
-    // Try dynamic import for both ESM and CJS
     let imported = await import(
       configPath.startsWith("file://") ? configPath : "file://" + configPath
     );
     config = imported.default || imported;
   } catch (e) {
     try {
-      // Fallback: require (for CJS)
       config = require(configPath);
     } catch (err) {
       console.error("Failed to load config file:", configPath, "\n", err);
@@ -62,33 +91,46 @@ const outputDir = resolve(
   opts.outputDir || config.outputDir || "storybook-app/src/stories"
 );
 
-// --- Main logic ---
-async function main() {
-  // Ensure outputDir exists
-  fs.mkdirSync(outputDir, { recursive: true });
+// --- CLI run ---
+printWelcome();
 
-  console.log("🔍 Scanning components in:", componentsDir);
-  const components = await scanComponents(componentsDir, {
-    include: config.include,
-    exclude: config.exclude,
-  });
-
-  if (!components.length) {
-    console.error("❌ No components found in", componentsDir);
-    process.exit(1);
-  }
-
-  console.log("🧠 Found components:", components.map((c) => c.name).join(", "));
-
-  for (const component of components) {
-    const story = await generateStory(component, outputDir);
-    writeStoryFile(component, story, outputDir);
-    console.log("✅ Wrote story:", component.name);
-  }
-
+if (!existsSync(componentsDir)) {
+  console.error(`❌ Components directory not found: ${componentsDir}`);
   console.log(
-    "\n🎉 All stories generated!\nTo view them, run:\n\n  cd storybook-app\n  npm install\n  npm run storybook\n"
+    "Please check your path, or update your config/include patterns.\n"
   );
+  console.log(`See ${REPO_URL} for help.`);
+  process.exit(1);
 }
 
-main();
+console.log("🔍 Scanning components in:", componentsDir);
+
+const components = await scanComponents(componentsDir, {
+  include: config.include,
+  exclude: config.exclude,
+});
+
+if (!components.length) {
+  console.error("❌ No components found!");
+  console.log(`Try editing your include/exclude patterns in your config.\n`);
+  console.log(`See ${REPO_URL} for troubleshooting.`);
+  process.exit(1);
+}
+
+console.log(
+  `\n🧠 Found ${components.length} component${
+    components.length !== 1 ? "s" : ""
+  }:`
+);
+console.log(components.map((c) => `  - ${c.name}`).join("\n"));
+
+fs.mkdirSync(outputDir, { recursive: true });
+
+console.log("\n📝 Generating stories...");
+for (const component of components) {
+  const story = await generateStory(component, outputDir);
+  writeStoryFile(component, story, outputDir);
+  console.log("  ✔️", component.name);
+}
+
+printOutro(components.length, outputDir);
