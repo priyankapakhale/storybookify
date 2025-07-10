@@ -4,15 +4,26 @@ import { generateSampleValue } from "./sampleData.js";
 
 export async function generateStory(component, outputDir: string) {
   const { name, path: filePath } = component;
-  const ext = path.extname(filePath);
+  if (!filePath) {
+    console.warn(`⚠️ No path for component "${name}", defaulting to ".tsx"`);
+  }
+  // Add a fallback to ".tsx" if filePath is missing
+  const ext = filePath ? path.extname(filePath) : ".tsx";
   const isJS = ext === ".js" || ext === ".jsx";
 
-  const importPath = path
-    .relative(outputDir, filePath)
-    .replace(/\.[tj]sx?$/, "");
-  const relativeImportPath = importPath.startsWith(".")
-    ? importPath
-    : "./" + importPath;
+  let relativeImportPath: string;
+
+  if (filePath) {
+    const importPath = path
+      .relative(outputDir, filePath)
+      .replace(/\.[tj]sx?$/, "");
+    relativeImportPath = importPath.startsWith(".")
+      ? importPath
+      : "./" + importPath;
+  } else {
+    // Fallback: Assume component is importable by name from the current directory
+    relativeImportPath = `./${name}`;
+  }
 
   // ✅ JS fallback
   if (isJS) {

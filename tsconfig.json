@@ -17,5 +17,5 @@
     "emitDeclarationOnly": false,
     "outDir": "dist"
   },
-  "include": ["cli", "core", "utils", "example-components"]
+  "include": ["cli", "core", "utils", "sample-components","__fixtures__"], 
 }
