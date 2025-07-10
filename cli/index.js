@@ -2,7 +2,7 @@
 
 import boxen from "boxen";
 import chalk from "chalk";
-import { spawn } from "child_process";
+import execa from "execa";
 import Table from "cli-table3";
 import { Command } from "commander";
 import fs, { existsSync } from "fs";
@@ -40,6 +40,19 @@ function printOutro(componentsCount) {
     )
   );
   console.log(chalk.gray("\n──────────────────────────────────────────\n"));
+}
+
+async function ensureStorybookDeps(storybookAppPath) {
+  // If node_modules is missing, or package-lock.json is newer than node_modules, install deps
+  const nodeModules = join(storybookAppPath, "node_modules");
+  const pkgLock = join(storybookAppPath, "package-lock.json");
+  if (!existsSync(nodeModules)) {
+    console.log(chalk.yellow("🔧 Installing Storybook dependencies..."));
+    await execa("npm", ["install"], {
+      cwd: storybookAppPath,
+      stdio: "inherit",
+    });
+  }
 }
 
 async function main() {
@@ -158,18 +171,17 @@ async function main() {
   printOutro(components.length);
 
   // ---- Start Storybook automatically ----
-  console.log("🚀 Starting Storybook...\n");
+  const storybookAppPath = join(__dirname, "../storybook-app");
+  console.log("🚀 Ensuring Storybook dependencies and starting Storybook...\n");
 
-  const storybookProcess = spawn("npm", ["run", "storybook"], {
-    cwd: join(__dirname, "../storybook-app"),
+  await ensureStorybookDeps(storybookAppPath);
+
+  await execa("npm", ["run", "storybook"], {
+    cwd: storybookAppPath,
     stdio: "inherit",
-    shell: true,
   });
 
-  storybookProcess.on("exit", (code) => {
-    process.exit(code);
-  });
-
+  // This will only log if Storybook process exits successfully
   console.log(
     boxen(
       chalk.green("✨ All done! Storybook is running ✨") +

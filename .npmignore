@@ -1,0 +1,26 @@
+# Don't publish dependency installs or lockfiles
+storybook-app/node_modules/
+storybook-app/package-lock.json
+storybook-app/yarn.lock
+storybook-app/pnpm-lock.yaml
+
+# Don't publish build artifacts
+storybook-app/build/
+storybook-app/dist/
+storybook-app/.next/
+storybook-app/.cache/
+
+# Don't publish editor junk
+storybook-app/.DS_Store
+storybook-app/.env*
+storybook-app/.vscode/
+storybook-app/.idea/
+*.log
+
+# Don't publish tests or fixtures
+__fixtures__/
+test/
+tests/
+coverage/
+*.test.*
+*.spec.*

@@ -15,7 +15,20 @@
     },
     "declaration": true,
     "emitDeclarationOnly": false,
-    "outDir": "dist"
+    "outDir": "dist",
+    "rootDir": "."
   },
-  "include": ["cli", "core", "utils", "sample-components","__fixtures__"], 
+  "include": [
+    "cli/**/*",
+    "core/**/*",
+    "utils/**/*",
+    "sample-components/**/*",
+    "__fixtures__/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "storybook-app"
+  ]
 }
