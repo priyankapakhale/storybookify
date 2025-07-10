@@ -15,39 +15,47 @@ export async function scanComponents(
   componentsDir: string,
   options: ScanOptions = {}
 ): Promise<{ name: string; path: string }[]> {
-  // Set sensible defaults if not provided
-  const include =
-    Array.isArray(options.include) && options.include.length > 0
-      ? options.include
-      : ["**/*.tsx", "**/*.jsx"];
-  const exclude =
-    Array.isArray(options.exclude) && options.exclude.length > 0
-      ? options.exclude
-      : ["**/*.test.*", "**/__mocks__/**", "**/deprecated/**"];
+  try {
+    // Debug: log what is being scanned
+    // console.log("scanComponents:", { componentsDir, options });
 
-  // Use fast-glob to find matching files
-  const entries = await fg(include, {
-    cwd: componentsDir,
-    ignore: exclude,
-    onlyFiles: true,
-    absolute: true,
-  });
+    const include =
+      Array.isArray(options.include) && options.include.length > 0
+        ? options.include
+        : ["**/*.tsx", "**/*.jsx"];
+    const exclude =
+      Array.isArray(options.exclude) && options.exclude.length > 0
+        ? options.exclude
+        : ["**/*.test.*", "**/__mocks__/**", "**/deprecated/**"];
 
-  // For each file, create a minimal component info object
-  const components: { name: string; path: string }[] = [];
-  for (const file of entries) {
-    // Parse out component name from filename
-    const name = basename(file, extname(file));
+    if (!fs.existsSync(componentsDir)) {
+      console.warn(`⚠️ Components directory does not exist: ${componentsDir}`);
+      return [];
+    }
 
-    // Optionally: Check file for a valid export (optional)
-    const content = fs.readFileSync(file, "utf-8");
-    if (!/export\s+(default|const|function|class)\s+/g.test(content)) continue;
-
-    components.push({
-      name,
-      path: file,
+    const entries = await fg(include, {
+      cwd: componentsDir,
+      ignore: exclude,
+      onlyFiles: true,
+      absolute: true,
     });
-  }
 
-  return components;
+    const components: { name: string; path: string }[] = [];
+    for (const file of entries) {
+      const name = basename(file, extname(file));
+      try {
+        const content = fs.readFileSync(file, "utf-8");
+        if (!/export\s+(default|const|function|class)\s+/g.test(content))
+          continue;
+        components.push({ name, path: file });
+      } catch (err) {
+        console.warn(`⚠️ Failed to read file: ${file} - Skipping.`, err);
+      }
+    }
+
+    return components;
+  } catch (err) {
+    console.error("❌ scanComponents failed:", err);
+    return [];
+  }
 }
