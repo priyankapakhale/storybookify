@@ -146,4 +146,4 @@ https://github.com/priyankapakhale/storybookify
 
 MIT
 
-**Built with ❤️ by @priyankapakhale**
+**Built with ❤️ by [@priyankapakhale](https://github.com/priyankapakhale)**
