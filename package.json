@@ -4,9 +4,10 @@
   "main": "cli/index.ts",
   "type": "module",
   "scripts": {
-    "start": "ts-node-esm --loader tsconfig-paths/esm.mjs cli/index.ts",
+    "start": "npm run storybookify && npm run storybook",
     "build": "tsc",
     "generate": "node dist/cli/index.js",
+    "storybookify": "node dist/cli/index.js",
     "dev:storybook": "cd storybook-app && npm run storybook"
   },
   "dependencies": {

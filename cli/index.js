@@ -1,26 +1,31 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
-import { resolve, join } from "path";
+import { resolve, join, dirname } from "path";
 import fs, { existsSync } from "fs";
 import { scanComponents } from "../dist/core/componentScanner.js";
 import { generateStory } from "../dist/core/storyGenerator.js";
 import { writeStoryFile } from "../dist/utils/fileUtils.js";
-import path from "path";
 import { fileURLToPath } from "url";
+import { spawn } from "child_process";
 
 const REPO_URL = "https://github.com/priyankapakhale/storybookify";
 
-//TODO: Add logo to be printed here
-function printLogo() {}
+// For __dirname in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
+// --- Hardcoded output directory (ALWAYS points to library) ---
+const outputDir = join(__dirname, "../storybook-app/src/stories");
+
+// Print logo and welcome messages
+function printLogo() {}
 function printWelcome() {
   printLogo();
   console.log(
     "✨ storybookify ✨  —  The zero-config, plug-and-play Storybook generator!\n"
   );
 }
-
 function printOutro(componentsCount, storiesPath) {
   console.log(
     "\n──────────────────────────────────────────────────────────────"
@@ -49,12 +54,7 @@ program
   .version("1.0.0")
   .option(
     "-c, --components-dir <dir>",
-    "Directory with your components (default: example-components)",
-    undefined
-  )
-  .option(
-    "-o, --output-dir <dir>",
-    "Output directory for generated stories (default: storybook-app/src/stories)",
+    "Directory with your components (default: src/components)",
     undefined
   )
   .option(
@@ -85,13 +85,13 @@ if (existsSync(configPath)) {
   }
 }
 
-// --- Merge config values with CLI options (CLI > config > default) ---
-const componentsDir =
-  opts.componentsDir || config.componentsDir || "example-components";
-const outputDir = resolve(
-  process.cwd(),
-  opts.outputDir || config.outputDir || "storybook-app/src/stories"
-);
+// --- Resolve componentsDir (consumer app) ---
+let componentsDir =
+  opts.componentsDir ||
+  (config.componentsDir
+    ? resolve(process.cwd(), config.componentsDir)
+    : null) ||
+  "src/components";
 
 // --- CLI run ---
 printWelcome();
@@ -126,18 +126,11 @@ console.log(
 );
 console.log(components.map((c) => `  - ${c.name}`).join("\n"));
 
+// --- Clean up existing stories in library ---
 fs.mkdirSync(outputDir, { recursive: true });
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const storiesDir = path.join(__dirname, "../storybook-app/src/stories");
-
-// Delete all files in the stories directory
-if (fs.existsSync(storiesDir)) {
-  fs.readdirSync(storiesDir).forEach((file) => {
-    fs.unlinkSync(path.join(storiesDir, file));
-  });
-}
+fs.readdirSync(outputDir).forEach((file) => {
+  fs.unlinkSync(join(outputDir, file));
+});
 
 console.log("\n📝 Generating stories...");
 for (const component of components) {
@@ -147,3 +140,16 @@ for (const component of components) {
 }
 
 printOutro(components.length, outputDir);
+
+// ---- Start Storybook automatically ----
+console.log("🚀 Starting Storybook...\n");
+
+const storybookProcess = spawn("npm", ["run", "storybook"], {
+  cwd: join(__dirname, "../storybook-app"),
+  stdio: "inherit",
+  shell: true,
+});
+
+storybookProcess.on("exit", (code) => {
+  process.exit(code);
+});
