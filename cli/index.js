@@ -6,6 +6,8 @@ import fs, { existsSync } from "fs";
 import { scanComponents } from "../dist/core/componentScanner.js";
 import { generateStory } from "../dist/core/storyGenerator.js";
 import { writeStoryFile } from "../dist/utils/fileUtils.js";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const REPO_URL = "https://github.com/priyankapakhale/storybookify";
 
@@ -125,6 +127,17 @@ console.log(
 console.log(components.map((c) => `  - ${c.name}`).join("\n"));
 
 fs.mkdirSync(outputDir, { recursive: true });
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const storiesDir = path.join(__dirname, "../storybook-app/src/stories");
+
+// Delete all files in the stories directory
+if (fs.existsSync(storiesDir)) {
+  fs.readdirSync(storiesDir).forEach((file) => {
+    fs.unlinkSync(path.join(storiesDir, file));
+  });
+}
 
 console.log("\n📝 Generating stories...");
 for (const component of components) {
