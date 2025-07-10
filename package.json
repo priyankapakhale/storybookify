@@ -12,7 +12,9 @@
     "generate": "node dist/cli/index.js",
     "storybookify": "node dist/cli/index.js",
     "dev:storybook": "cd storybook-app && npm run storybook",
-    "test": "vitest"
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint core cli utils --ext .js,.ts,.tsx"
   },
   "dependencies": {
     "@babel/parser": "^7.0.0",
@@ -30,11 +32,19 @@
     "tsconfig-paths": "^4.2.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.30.1",
     "@types/commander": "^2.12.0",
     "@types/node": "^24.0.10",
     "@types/react": "^18.2.62",
     "@types/react-dom": "^18.2.17",
+    "@typescript-eslint/eslint-plugin": "^8.36.0",
+    "@typescript-eslint/parser": "^8.36.0",
     "@vitest/ui": "^3.2.4",
+    "eslint": "^9.30.1",
+    "eslint-config-prettier": "^10.1.5",
+    "eslint-plugin-prettier": "^5.5.1",
+    "eslint-plugin-react": "^7.37.5",
+    "prettier": "^3.6.2",
     "ts-morph": "^22.0.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3",

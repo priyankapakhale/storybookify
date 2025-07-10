@@ -1,6 +1,6 @@
 import fg from "fast-glob";
-import { join, extname, basename } from "path";
 import fs from "fs";
+import { basename, extname } from "path";
 
 export interface ScanOptions {
   include?: string[];

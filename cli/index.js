@@ -1,18 +1,17 @@
 #!/usr/bin/env node
 
+import boxen from "boxen";
+import chalk from "chalk";
+import { spawn } from "child_process";
+import Table from "cli-table3";
 import { Command } from "commander";
-import { resolve, join, dirname } from "path";
 import fs, { existsSync } from "fs";
+import ora from "ora";
+import path, { dirname, join, resolve } from "path"; // <-- Make sure this is here!
+import { fileURLToPath } from "url";
 import { scanComponents } from "../dist/core/componentScanner.js";
 import { generateStory } from "../dist/core/storyGenerator.js";
 import { writeStoryFile } from "../dist/utils/fileUtils.js";
-import { fileURLToPath } from "url";
-import { spawn } from "child_process";
-import chalk from "chalk";
-import ora from "ora";
-import Table from "cli-table3";
-import boxen from "boxen";
-import path from "path"; // <-- Make sure this is here!
 
 const REPO_URL = "https://github.com/priyankapakhale/storybookify";
 
@@ -34,7 +33,7 @@ function printWelcome() {
   );
 }
 
-function printOutro(componentsCount, storiesPath) {
+function printOutro(componentsCount) {
   console.log(
     chalk.green(
       `\n🎉 All stories generated! (${componentsCount} component${
@@ -70,10 +69,12 @@ let configPath = opts.config || join(process.cwd(), "storybookify.config.js");
 
 if (existsSync(configPath)) {
   try {
-    let imported = await import(
-      configPath.startsWith("file://") ? configPath : "file://" + configPath
-    );
-    config = imported.default || imported;
+    (async () => {
+      let imported = await import(
+        configPath.startsWith("file://") ? configPath : "file://" + configPath
+      );
+      config = imported.default || imported;
+    })();
   } catch (e) {
     try {
       config = require(configPath);
@@ -110,12 +111,15 @@ if (!existsSync(componentsDir)) {
   process.exit(1);
 }
 
-const spinner = ora("Scanning components...").start();
-const components = await scanComponents(componentsDir, {
-  include: config.include,
-  exclude: config.exclude,
-});
-spinner.succeed(chalk.green(`Found ${components.length} components.`));
+let components;
+(async () => {
+  const spinner = ora("Scanning components...").start();
+  components = await scanComponents(componentsDir, {
+    include: config.include,
+    exclude: config.exclude,
+  });
+  spinner.succeed(chalk.green(`Found ${components.length} components.`));
+})();
 
 if (!components.length) {
   console.error(chalk.red("✖ No components found!"));
@@ -143,10 +147,12 @@ console.log("\n📝 Generating stories...");
 const generatedFiles = [];
 
 for (const component of components) {
-  const story = await generateStory(component, outputDir);
-  const filePath = writeStoryFile(component, story, outputDir);
-  generatedFiles.push({ name: component.name, file: filePath });
-  console.log(chalk.green("✔"), chalk.bold(component.name));
+  (async () => {
+    const story = await generateStory(component, outputDir);
+    const filePath = writeStoryFile(component, story, outputDir);
+    generatedFiles.push({ name: component.name, file: filePath });
+    console.log(chalk.green("✔"), chalk.bold(component.name));
+  })();
 }
 
 // --- Pretty summary table ---
@@ -160,7 +166,7 @@ for (const entry of generatedFiles) {
 }
 console.log("\n" + table.toString());
 
-printOutro(components.length, outputDir);
+printOutro(components.length);
 
 // ---- Start Storybook automatically ----
 console.log("🚀 Starting Storybook...\n");
