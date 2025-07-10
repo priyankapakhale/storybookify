@@ -144,6 +144,6 @@ https://github.com/priyankapakhale/storybookify
 
 ## 📄 License
 
-MIT
+This project is licensed under the [MIT License](./LICENSE).
 
 **Built with ❤️ by [@priyankapakhale](https://github.com/priyankapakhale)**
