@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "main": "cli/index.ts",
   "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "npm run storybookify && npm run storybook",
     "build": "tsc",
