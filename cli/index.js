@@ -8,6 +8,11 @@ import { generateStory } from "../dist/core/storyGenerator.js";
 import { writeStoryFile } from "../dist/utils/fileUtils.js";
 import { fileURLToPath } from "url";
 import { spawn } from "child_process";
+import chalk from "chalk";
+import ora from "ora";
+import Table from "cli-table3";
+import boxen from "boxen";
+import path from "path"; // <-- Make sure this is here!
 
 const REPO_URL = "https://github.com/priyankapakhale/storybookify";
 
@@ -20,30 +25,24 @@ const outputDir = join(__dirname, "../storybook-app/src/stories");
 
 // Print logo and welcome messages
 function printLogo() {}
+
 function printWelcome() {
   printLogo();
   console.log(
-    "✨ storybookify ✨  —  The zero-config, plug-and-play Storybook generator!\n"
+    chalk.cyan.bold("✨ storybookify ✨") +
+      chalk.gray(" — The zero-config, plug-and-play Storybook generator!\n")
   );
 }
+
 function printOutro(componentsCount, storiesPath) {
   console.log(
-    "\n──────────────────────────────────────────────────────────────"
+    chalk.green(
+      `\n🎉 All stories generated! (${componentsCount} component${
+        componentsCount !== 1 ? "s" : ""
+      })`
+    )
   );
-  console.log(
-    `🎉 All stories generated! (${componentsCount} component${
-      componentsCount !== 1 ? "s" : ""
-    })`
-  );
-  console.log("\nTo view your Storybook, run:\n");
-  console.log("  cd storybook-app");
-  console.log("  npm install");
-  console.log("  npm run storybook\n");
-  console.log("For docs, troubleshooting, or to contribute:");
-  console.log(`  ${REPO_URL}\n`);
-  console.log(
-    "──────────────────────────────────────────────────────────────\n"
-  );
+  console.log(chalk.gray("\n──────────────────────────────────────────\n"));
 }
 
 const program = new Command();
@@ -97,25 +96,33 @@ let componentsDir =
 printWelcome();
 
 if (!existsSync(componentsDir)) {
-  console.error(`❌ Components directory not found: ${componentsDir}`);
-  console.log(
-    "Please check your path, or update your config/include patterns.\n"
+  console.error(
+    chalk.red(
+      `✖ Components directory not found: ${chalk.yellow(componentsDir)}`
+    )
   );
-  console.log(`See ${REPO_URL} for help.`);
+  console.log(
+    chalk.gray(
+      "Please check your path, or update your config/include patterns.\n"
+    )
+  );
+  console.log(chalk.cyan(`See ${REPO_URL} for help.`));
   process.exit(1);
 }
 
-console.log("🔍 Scanning components in:", componentsDir);
-
+const spinner = ora("Scanning components...").start();
 const components = await scanComponents(componentsDir, {
   include: config.include,
   exclude: config.exclude,
 });
+spinner.succeed(chalk.green(`Found ${components.length} components.`));
 
 if (!components.length) {
-  console.error("❌ No components found!");
-  console.log(`Try editing your include/exclude patterns in your config.\n`);
-  console.log(`See ${REPO_URL} for troubleshooting.`);
+  console.error(chalk.red("✖ No components found!"));
+  console.log(
+    chalk.gray(`Try editing your include/exclude patterns in your config.\n`)
+  );
+  console.log(chalk.cyan(`See ${REPO_URL} for troubleshooting.`));
   process.exit(1);
 }
 
@@ -133,11 +140,25 @@ fs.readdirSync(outputDir).forEach((file) => {
 });
 
 console.log("\n📝 Generating stories...");
+const generatedFiles = [];
+
 for (const component of components) {
   const story = await generateStory(component, outputDir);
-  writeStoryFile(component, story, outputDir);
-  console.log("  ✔️", component.name);
+  const filePath = writeStoryFile(component, story, outputDir);
+  generatedFiles.push({ name: component.name, file: filePath });
+  console.log(chalk.green("✔"), chalk.bold(component.name));
 }
+
+// --- Pretty summary table ---
+const table = new Table({
+  head: [chalk.cyan("Component"), chalk.cyan("Story File")],
+});
+for (const entry of generatedFiles) {
+  // Show path relative to the user's current directory
+  const prettyStory = path.relative(process.cwd(), entry.file);
+  table.push([entry.name, prettyStory]);
+}
+console.log("\n" + table.toString());
 
 printOutro(components.length, outputDir);
 
@@ -149,6 +170,19 @@ const storybookProcess = spawn("npm", ["run", "storybook"], {
   stdio: "inherit",
   shell: true,
 });
+
+console.log(
+  boxen(
+    chalk.green("✨ All done! Storybook is running ✨") +
+      "\n" +
+      chalk.cyan("Visit http://localhost:6006/ to view your Storybook."),
+    {
+      padding: 1,
+      borderColor: "green",
+      borderStyle: "round",
+    }
+  )
+);
 
 storybookProcess.on("exit", (code) => {
   process.exit(code);

@@ -2,7 +2,8 @@ import { Project } from "ts-morph";
 import path from "path";
 
 export async function parseProps(filePath: string, componentName: string) {
-  console.log("📄 Parsing:", filePath);
+  const prettyPath = path.relative(process.cwd(), filePath);
+  console.log(`📄 Parsing: ${prettyPath}`);
 
   // If it's a JS/JSX file, we skip prop parsing
   const ext = path.extname(filePath);

@@ -1,12 +1,10 @@
 import fs from "fs";
 import path from "path";
 
-export function writeStoryFile(
-  component,
-  storyCode: string,
-  outputDir: string
-) {
-  const filename = path.join(outputDir, `${component.name}.stories.tsx`);
-  fs.mkdirSync(path.dirname(filename), { recursive: true });
-  fs.writeFileSync(filename, storyCode, "utf-8");
+// utils/fileUtils.js
+export function writeStoryFile(component, story, outputDir) {
+  const fileName = `${component.name}.stories.tsx`;
+  const filePath = path.join(outputDir, fileName);
+  fs.writeFileSync(filePath, story);
+  return filePath;
 }
