@@ -1,11 +1,25 @@
 {
   "name": "storybookify",
   "version": "0.1.0",
-  "main": "cli/index.ts",
+  "main": "dist/cli/index.js",
   "type": "module",
   "engines": {
     "node": ">=18"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/priyankapakhale/storybookify"
+  },
+  "author": "Priyanka Pakhale priyanka.pakhale54@gmail.com",
+  "keywords": [
+    "storybook",
+    "react",
+    "cli",
+    "generator",
+    "stories",
+    "zero-config"
+  ],
+  "license": "MIT",
   "scripts": {
     "start": "npm run storybookify && npm run storybook",
     "build": "tsc",
@@ -14,7 +28,12 @@
     "dev:storybook": "cd storybook-app && npm run storybook",
     "test": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint core cli utils --ext .js,.ts,.tsx"
+    "lint": "eslint core cli utils --ext .js,.ts,.tsx",
+    "dev:pack": "rm -rf node_modules && rm -rf dist && rm -rf build && npm install && npm run build && npm pack"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
   },
   "dependencies": {
     "@babel/parser": "^7.0.0",
@@ -26,10 +45,8 @@
     "express": "^4.18.0",
     "fast-glob": "^3.3.3",
     "ora": "^8.2.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "scheduler": "^0.26.0",
-    "tsconfig-paths": "^4.2.0"
+    "tsconfig-paths": "^4.2.0",
+    "ts-morph": "^22.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",
@@ -45,12 +62,22 @@
     "eslint-plugin-prettier": "^5.5.1",
     "eslint-plugin-react": "^7.37.5",
     "prettier": "^3.6.2",
-    "ts-morph": "^22.0.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
   },
   "bin": {
-    "storybookify": "cli/index.js"
-  }
+    "storybookify": "dist/cli/index.js"
+  },
+  "files": [
+    "dist/",
+    "storybook-app/"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/cli/index.js",
+      "require": "./dist/cli/index.js"
+    }
+  },
+  "types": "dist/cli/index.d.ts"
 }
