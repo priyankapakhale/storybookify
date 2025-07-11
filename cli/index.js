@@ -2,14 +2,14 @@
 
 import boxen from "boxen";
 import chalk from "chalk";
-import { spawn } from "child_process";
 import Table from "cli-table3";
 import { Command } from "commander";
-import fs from "fs";
+import fs from "fs-extra";
 import ora from "ora";
 import path from "path";
 import { fileURLToPath } from "url";
 import { execa } from "execa";
+import tmp from "tmp-promise";
 import { scanComponents } from "../dist/core/componentScanner.js";
 import { generateStory } from "../dist/core/storyGenerator.js";
 import { writeStoryFile } from "../dist/utils/fileUtils.js";
@@ -19,119 +19,14 @@ const REPO_URL = "https://github.com/priyankapakhale/storybookify";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const consumerRoot = process.cwd();
-const outputDir = path.join(consumerRoot, "src/stories");
-const storybookDir = path.join(consumerRoot, ".storybook");
-
-// Helper: Install storybook if not present
-async function ensureStorybookInstalled() {
-  const pkgPath = path.join(consumerRoot, "package.json");
-  let pkg = {};
-  if (fs.existsSync(pkgPath)) {
-    pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-  }
-
-  // Check if @storybook/react or storybook core is present
-  const hasStorybookReact =
-    (pkg.devDependencies && pkg.devDependencies["@storybook/react"]) ||
-    (pkg.dependencies && pkg.dependencies["@storybook/react"]);
-
-  const hasSBAddon =
-    (pkg.devDependencies &&
-      pkg.devDependencies["@storybook/addon-essentials"]) ||
-    (pkg.dependencies && pkg.dependencies["@storybook/addon-essentials"]);
-
-  // Already present: skip install, but maybe warn
-  if (hasStorybookReact && hasSBAddon) {
-    console.log(chalk.green("✔ Storybook already installed in your project."));
-    return;
-  }
-
-  // If there are *some* Storybook packages but not all, warn about potential version mismatch
-  if (hasStorybookReact || hasSBAddon) {
-    console.log(
-      chalk.red(
-        "\n⚠️ Detected a partial Storybook install or potential version conflict.\n" +
-          "Please install matching Storybook dependencies yourself, e.g.:\n" +
-          chalk.yellow(
-            "  npm install --save-dev @storybook/react @storybook/addon-essentials"
-          ) +
-          "\nOnce installed, re-run storybookify."
-      )
-    );
-    process.exit(1);
-  }
-
-  // Otherwise, clean install both
-  console.log(chalk.yellow("\n🚀 Installing Storybook in your project..."));
-  try {
-    await execa(
-      "npm",
-      [
-        "install",
-        "--save-dev",
-        "@storybook/react",
-        "@storybook/addon-essentials",
-        "@storybook/react-vite",
-      ],
-      { cwd: consumerRoot, stdio: "inherit" }
-    );
-    console.log(chalk.green("✔ Storybook installed."));
-  } catch (err) {
-    console.log(chalk.red("\n❌ Failed to install Storybook dependencies."));
-    console.log(
-      chalk.gray(
-        "If you see a dependency conflict, try running:\n" +
-          "  npm install --save-dev @storybook/react @storybook/addon-essentials --legacy-peer-deps\n" +
-          "Then re-run storybookify."
-      )
-    );
-    process.exit(1);
-  }
-}
-
-// Helper: Generate .storybook config
-function generateStorybookConfig() {
-  fs.mkdirSync(storybookDir, { recursive: true });
-
-  // main.js (basic config)
-  fs.writeFileSync(
-    path.join(storybookDir, "main.js"),
-    `
-export default {
-  stories: ['../src/stories/**/*.stories.@(js|jsx|ts|tsx)'],
-  addons: ['@storybook/addon-essentials'],
-  framework: '@storybook/react-vite'
-};
-`.trim()
-  );
-
-  // preview.js (optional)
-  fs.writeFileSync(
-    path.join(storybookDir, "preview.js"),
-    `
-export const parameters = {
-  actions: { argTypesRegex: "^on[A-Z].*" },
-  controls: { expanded: true },
-};
-`.trim()
-  );
-}
-
-// Helper: Patch package.json to add a script
-function addStorybookScript() {
-  const pkgPath = path.join(consumerRoot, "package.json");
-  let pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-  pkg.scripts = pkg.scripts || {};
-  pkg.scripts["storybook"] = "storybook dev -p 6006";
-  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
-}
-
-async function main() {
+async function runIsolatedStorybook() {
+  // 1. CLI options
   const program = new Command();
   program
     .name("storybookify")
-    .description("Generate Storybook stories from your React components.")
+    .description(
+      "Generate and run Storybook for your components in an isolated temp environment."
+    )
     .version("1.0.0")
     .option(
       "-c, --components-dir <dir>",
@@ -146,19 +41,28 @@ async function main() {
 
   const opts = program.opts();
 
-  // --- Config file loading ---
+  // 2. Resolve paths (from user project)
+  const userRoot = process.cwd();
+  let componentsDir = opts.componentsDir
+    ? path.resolve(userRoot, opts.componentsDir)
+    : path.join(userRoot, "src/components");
+
+  // (Optional: custom config file support)
   let config = {};
-  let configPath =
-    opts.config || path.join(consumerRoot, "storybookify.config.js");
+  let configPath = opts.config || path.join(userRoot, "storybookify.config.js");
   if (fs.existsSync(configPath)) {
     try {
       let imported = await import(
         configPath.startsWith("file://") ? configPath : "file://" + configPath
       );
       config = imported.default || imported;
+      if (config.componentsDir)
+        componentsDir = path.resolve(userRoot, config.componentsDir);
     } catch (e) {
       try {
         config = require(configPath);
+        if (config.componentsDir)
+          componentsDir = path.resolve(userRoot, config.componentsDir);
       } catch (err) {
         console.error("Failed to load config file:", configPath, "\n", err);
         process.exit(1);
@@ -166,20 +70,7 @@ async function main() {
     }
   }
 
-  let componentsDir =
-    opts.componentsDir ||
-    (config.componentsDir
-      ? path.resolve(consumerRoot, config.componentsDir)
-      : null) ||
-    "src/components";
-
-  // 1. Install Storybook if needed
-  await ensureStorybookInstalled();
-
-  // 2. Generate .storybook config
-  generateStorybookConfig();
-
-  // 3. Generate stories in consumer app
+  // 3. Scan components
   if (!fs.existsSync(componentsDir)) {
     console.error(
       chalk.red(
@@ -188,12 +79,6 @@ async function main() {
     );
     process.exit(1);
   }
-
-  fs.mkdirSync(outputDir, { recursive: true });
-  fs.readdirSync(outputDir).forEach((file) => {
-    fs.unlinkSync(path.join(outputDir, file));
-  });
-
   const spinner = ora("Scanning components...").start();
   const components =
     (await scanComponents(componentsDir, {
@@ -201,50 +86,149 @@ async function main() {
       exclude: config.exclude,
     })) || [];
   spinner.succeed(chalk.green(`Found ${components.length} components.`));
-
   if (!components.length) {
     console.error(chalk.red("✖ No components found!"));
     process.exit(1);
   }
 
-  console.log("\n📝 Generating stories...");
-  const generatedFiles = [];
+  // 4. Setup temp dir
+  const tmpDirObj = await tmp.dir({
+    unsafeCleanup: true,
+    prefix: "storybookify-",
+  });
+  const tmpDir = tmpDirObj.path;
+  const tmpStories = path.join(tmpDir, "src/stories");
+  console.log(
+    chalk.yellow(`\n[storybookify] Using temp directory: ${tmpDir}\n`)
+  );
+  const tmpComponents = path.join(tmpDir, "src/components");
 
+  // 5. Copy user components and generate stories
+  await fs.ensureDir(tmpComponents);
+  await fs.copy(componentsDir, tmpComponents);
+
+  await fs.ensureDir(tmpStories);
+
+  // Here’s the fix: For each component, calculate the new relative import path from story to component in temp dir
   for (const component of components) {
-    const story = await generateStory(component, outputDir);
-    const filePath = writeStoryFile(component, story, outputDir);
-    generatedFiles.push({ name: component.name, file: filePath });
-    console.log(chalk.green("✔"), chalk.bold(component.name));
+    const originalFile = component.filePath || component.path; // adjust per your scanner
+    const relPath = path.relative(componentsDir, originalFile);
+    const tempComponentPath = path.join(tmpComponents, relPath);
+    let relativeImport = path
+      .relative(tmpStories, tempComponentPath)
+      .replace(/\.[tj]sx?$/, "");
+    if (!relativeImport.startsWith(".")) relativeImport = "./" + relativeImport;
+
+    const story = await generateStory(
+      { ...component, importOverride: relativeImport },
+      tmpStories
+    );
+    writeStoryFile(component, story, tmpStories);
   }
 
   // Pretty summary table
   const table = new Table({
     head: [chalk.cyan("Component"), chalk.cyan("Story File")],
   });
-  for (const entry of generatedFiles) {
-    const prettyStory = path.relative(consumerRoot, entry.file);
-    table.push([entry.name, prettyStory]);
+  for (const comp of components) {
+    table.push([comp.name, `src/stories/${comp.name}.stories.tsx`]);
   }
   console.log("\n" + table.toString());
 
-  // 4. Add script to package.json
-  addStorybookScript();
+  // 6. Minimal Storybook config
+  const sbDir = path.join(tmpDir, ".storybook");
+  await fs.ensureDir(sbDir);
+  await fs.writeFile(
+    path.join(sbDir, "main.js"),
+    `
+export default {
+  stories: ['../src/stories/**/*.stories.@(js|jsx|ts|tsx)'],
+  addons: ['@storybook/addon-essentials'],
+  framework: { name: '@storybook/react-vite', options: {} }
+};
+    `.trim()
+  );
+  await fs.writeFile(
+    path.join(sbDir, "preview.js"),
+    `
+export const parameters = {
+  actions: { argTypesRegex: "^on[A-Z].*" },
+  controls: { expanded: true },
+};
+    `.trim()
+  );
 
-  // 5. Start Storybook
-  console.log("\n🚀 Starting Storybook...\n");
-  const storybookProcess = spawn("npm", ["run", "storybook"], {
-    cwd: consumerRoot,
-    stdio: "inherit",
-    shell: true,
-  });
+  // 7. Minimal package.json (try to match user's react version)
+  let userReact = "^18.0.0";
+  let userReactDom = "^18.0.0";
+  try {
+    const userPkg = JSON.parse(
+      fs.readFileSync(path.join(userRoot, "package.json"), "utf8")
+    );
+    userReact =
+      userPkg.dependencies?.react ||
+      userPkg.devDependencies?.react ||
+      userReact;
+    userReactDom =
+      userPkg.dependencies?.["react-dom"] ||
+      userPkg.devDependencies?.["react-dom"] ||
+      userReactDom;
+  } catch {}
+  await fs.writeFile(
+    path.join(tmpDir, "package.json"),
+    JSON.stringify(
+      {
+        name: "storybookify-runner",
+        private: true,
+        scripts: { storybook: "storybook dev -p 6006" },
+        dependencies: {
+          react: userReact,
+          "react-dom": userReactDom,
+        },
+        devDependencies: {
+          "@storybook/react-vite": "^8.6.14",
+          "@storybook/addon-essentials": "^8.6.14",
+        },
+      },
+      null,
+      2
+    )
+  );
 
-  storybookProcess.on("exit", (code) => {
-    process.exit(code);
-  });
+  // 8. Minimal tsconfig (for TS/TSX support)
+  await fs.writeFile(
+    path.join(tmpDir, "tsconfig.json"),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          jsx: "react-jsx",
+          allowJs: true,
+          esModuleInterop: true,
+          resolveJsonModule: true,
+          isolatedModules: true,
+          module: "esnext",
+          target: "esnext",
+          moduleResolution: "node",
+          skipLibCheck: true,
+          forceConsistentCasingInFileNames: true,
+        },
+        include: ["src"],
+      },
+      null,
+      2
+    )
+  );
 
+  // 9. Install and start Storybook
+  console.log(
+    chalk.cyan(
+      "\n🚀 Setting up and launching Storybook in a fresh, isolated environment..."
+    )
+  );
+  await execa("npm", ["install"], { cwd: tmpDir, stdio: "inherit" });
   console.log(
     boxen(
-      chalk.green("✨ All done! Storybook is running ✨") +
+      chalk.green("✨ All done! Isolated Storybook is running ✨") +
         "\n" +
         chalk.cyan("Visit http://localhost:6006/ to view your Storybook."),
       {
@@ -254,6 +238,10 @@ async function main() {
       }
     )
   );
+  await execa("npm", ["run", "storybook"], { cwd: tmpDir, stdio: "inherit" });
+
+  // Optional: clean up temp dir on exit
+  tmpDirObj.cleanup();
 }
 
-main();
+runIsolatedStorybook();
