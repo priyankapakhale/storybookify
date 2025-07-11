@@ -29,6 +29,5 @@
     "node_modules",
     "dist",
     "build",
-    "storybook-app"
   ]
 }
